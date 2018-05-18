@@ -4,11 +4,16 @@
 package com.huaban.analysis.jieba;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Locale;
 
+import com.csvreader.CsvReader;
+import com.csvreader.CsvWriter;
+import com.zhaoze.java.BookUtils;
 import junit.framework.TestCase;
 
 import org.junit.Test;
@@ -197,33 +202,79 @@ public class JiebaSegmenterTest extends TestCase {
             (length * 1.0) / 1024.0f / (elapsed * 1.0 / 1000.0f), wordCount * 1000.0f / (elapsed * 1.0)));
     }
 
-    public void test(){
-//        岳飞    岳飞传、岳飞  0.79\1
-//        帝天    傲世帝天 0.76
-//        弃妃    弃妃要翻身、弃妃，别来无恙、一世倾城：冷宫弃妃 0.76\0.71\0.60
-//        微信    微信民国、微信杀机      0.77\0.65
-//        恐龙    恐龙世界大冒险 1：复活的恐龙、恐龙图鉴、重返恐龙时代 0.76\0.64
-//        感动    感动中国：感动的力量、感动教育、感动你我的故事  0.89\0.83\0.66
-//        敦煌    在敦煌、大敦煌、敦煌之旅                    0.96\0\0.73
-//        斗罗    斗罗大陆                                  0.84
-//        末世    重启末世     0.72
-//        枭宠    侯门枭宠、黑帝枭宠：恶魔千金归来3、黑帝枭宠：老婆，你要乖、军少枭宠之萌妻拐回家  0.74\0.58\0.58
-//        枸杞    红枸杞、天香枸杞、餐桌上的中药：枸杞
-//        泪痣    小泪痣、泪痣：我不允许我再爱上你、印记：滴泪痣
-//        猎艳    猎艳高手、我的猎艳之路、龙帝猎艳记
-//        甜心    惹婚甜心
-//        神王    不朽神王、绝世神王、武极神王
-//        病宠    腹黑暖男病宠小懒妻、病宠娇妻天后洗白手册、豪门隐婚之病宠娇妻
-//        短信    短信的力量、恋人浪漫短信、幽默笑话短信
-//        重庆    重庆故事、美丽重庆、重庆纪实
-//        重生    时间重生、重生手记、寻找重生之旅
-//        韩信    韩信的故事、一代战神：韩信、千古一战神：韩信
-        String str1 = "枭宠";
-        String str2 = "黑帝枭宠：老婆，你要乖";
-        ZzCalSimTest simModle = new ZzCalSimTest();
 
-        double res = simModle.calSimByWord(str1, str2);
-        System.out.println("相关性结果："+res);
+
+    public void test(){
+        // 使用第三放jar包，进行csv文件的读写
+        ZzCalSimTest simModle = new ZzCalSimTest();
+        try
+        {
+            String filePathR = "/home/zhaoze/000/book-diff.csv";
+            String filePathW = "/home/zhaoze/000/book-diff-similar.csv";
+
+            // 创建CSV读对象
+            CsvReader csvReader = new CsvReader(filePathR, ',',  Charset.forName("UTF-8"));
+            // 创建CSV写对象
+            CsvWriter csvWriter = new CsvWriter(filePathW,',', Charset.forName("UTF-8"));
+
+            // 读表头
+            csvReader.readHeaders();
+
+            // 获取总的列数
+            int num = csvReader.getHeaderCount();
+            // 获取第一列标题名称
+            String strHeader = csvReader.getHeader(0);
+            // 获取某一行数据
+            String [] context = csvReader.getValues();
+            // 获取所有标题组成的数组
+            String [] strHeaders = csvReader.getHeaders();
+
+            // 写表头
+            // String [] strHeaders = {"query"};
+            //csvWriter.writeRecord(strHeaders);
+
+            // 筛选出阅读部分，并将其存储在外部
+            while (csvReader.readRecord()){
+                //读一整行
+                //System.out.println(csvReader.getRawRecord());
+
+                // 读这行的某一列
+                //String strNeed = csvReader.get("需求");
+                // 从０开始
+                String oriQuery = csvReader.get(0);
+                String oriTitle = csvReader.get(2);
+                String titleNoPunc = oriTitle.replaceAll("\\(.*?\\)|\\{.*?}|\\[.*?]|【.*?】|（.*?）", "");
+                titleNoPunc = titleNoPunc.replaceAll("[\\p{P}+~$`^=|<>～｀＄＾＋＝｜＜＞￥×⎵ ]", "");
+
+                String queryNoUselessItems = BookUtils.removeUselessItems(oriQuery.toLowerCase());
+                queryNoUselessItems = queryNoUselessItems.replaceAll("\\(.*?\\)|\\{.*?}|\\[.*?]|【.*?】|（.*?）", "");
+                queryNoUselessItems = queryNoUselessItems.replaceAll("[\\p{P}+~$`^=|<>～｀＄＾＋＝｜＜＞￥×⎵ ]", "");
+                //queryNoUselessItems = com.xiaomi.search.global.utils.BookUtils.removeJsonAuthorItems(json, queryNoUselessItems);
+
+                double oriRes = simModle.calSimByWord(oriQuery, oriTitle);
+                double res = simModle.calSimByWord(queryNoUselessItems, titleNoPunc);
+
+                System.out.println("相关性结果："+res);
+                String [] outMsg = new String[8];
+                outMsg[0] = csvReader.get(0);
+                outMsg[1] = csvReader.get(1);
+                outMsg[2] = csvReader.get(2);
+                outMsg[3] = Double.toString(oriRes);
+                outMsg[4] = "";
+                outMsg[5] = queryNoUselessItems;
+                outMsg[6] = titleNoPunc;
+                outMsg[7] = Double.toString(res);
+                csvWriter.writeRecord(outMsg);
+
+            }
+
+            // 关闭写操作器
+            csvWriter.close();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
 
 
     }
